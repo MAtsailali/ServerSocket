@@ -1,18 +1,14 @@
-# Pas 1: Fem servir una imatge de Java (OpenJDK)
-FROM openjdk:17-jdk-slim
+# ETAPA 1: Compilació
+FROM gradle:8.3-jdk17 AS build
+COPY --chown=gradle:gradle . /home/gradle/src
+WORKDIR /home/gradle/src
+RUN ./gradlew shadowJar --no-daemon
 
-# Pas 2: Creem el directori de treball dqwqwqw
+# ETAPA 2: Execució
+FROM eclipse-temurin:17-jdk-jammy
 WORKDIR /app
-
-# Pas 3: Copiem el fitxer JAR generat (després de fer ./gradlew shadowJar)
-# El nom sol ser "projecte-all.jar"
-COPY build/libs/*-all.jar app.jar
-
-# Pas 4: Creem la carpeta uploads per evitar errors de permisos
+# Copiem el JAR generat des de l'etapa anterior
+COPY --from=build /home/gradle/src/build/libs/*-all.jar app.jar
 RUN mkdir -p /app/uploads && chmod 777 /app/uploads
-
-# Pas 5: Exposem el port del socket
 EXPOSE 1234
-
-# Pas 6: Comanda per executar el servidor
 CMD ["java", "-jar", "app.jar"]
