@@ -1,7 +1,7 @@
 # Pas 1: Fem servir una imatge de Java (OpenJDK)
 FROM openjdk:17-jdk-slim
 
-# Pas 2: Creem el directori de treball
+# Pas 2: Creem el directori de treball dqwqwqw
 WORKDIR /app
 
 # Pas 3: Copiem el fitxer JAR generat (després de fer ./gradlew shadowJar)
