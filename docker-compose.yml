@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  socket-server:
+    build: .
+    container_name: routex-socket-service
+    # La indentación de 'ports' debe estar al mismo nivel que 'build'
+    ports:
+      - target: 1234
+        published: 1234
+        protocol: tcp
+        mode: host
+    volumes:
+      - socket_uploads:/app/uploads
+    environment:
+      - SERVER_PORT=1234
+      - AES_KEY=1234567812345678
+    restart: always
+    deploy:
+      restart_policy:
+        condition: on-failure
+
+volumes:
+  socket_uploads:
+
+networks:
+  default:
+    name: routex-network

@@ -1,25 +1,6 @@
 import java.io.*
 import java.net.ServerSocket
 import java.net.Socket
-import javax.crypto.Cipher
-import javax.crypto.spec.SecretKeySpec
-
-private const val KEY_STRING = "1234567812345678"
-private const val ALGORITHM = "AES/ECB/PKCS5Padding"
-
-fun xifrar(dades: ByteArray): ByteArray {
-    val key = SecretKeySpec(KEY_STRING.toByteArray(), "AES")
-    val cipher = Cipher.getInstance(ALGORITHM)
-    cipher.init(Cipher.ENCRYPT_MODE, key)
-    return cipher.doFinal(dades)
-}
-
-fun desxifrar(dades: ByteArray): ByteArray {
-    val key = SecretKeySpec(KEY_STRING.toByteArray(), "AES")
-    val cipher = Cipher.getInstance(ALGORITHM)
-    cipher.init(Cipher.DECRYPT_MODE, key)
-    return cipher.doFinal(dades)
-}
 
 fun main() {
     val port = 1234
@@ -55,26 +36,24 @@ fun handleClient(socket: Socket) {
             "PUJAR" -> {
                 try {
                     val mida = input.readLong()
-                    println("📥 Rebent fitxer xifrat: $fileName ($mida bytes)")
+                    println("📥 Rebent fitxer: $fileName ($mida bytes)")
 
+                    // Aseguramos que el directorio padre existe (por si fileName tiene subcarpetas)
                     file.parentFile?.mkdirs()
 
-                    // 1. Leemos todos los bytes cifrados
-                    val bytesCifrats = ByteArray(mida.toInt())
-                    var totalLlegit = 0
-                    while (totalLlegit < mida) {
-                        val llegitsNow = input.read(bytesCifrats, totalLlegit, (mida - totalLlegit).toInt())
-                        if (llegitsNow == -1) break
-                        totalLlegit += llegitsNow
-                    }
-
-                    // 2. Desciframos y guardamos en disco
-                    val bytesClars = desxifrar(bytesCifrats)
                     FileOutputStream(file).use { fos ->
-                        fos.write(bytesClars)
+                        val buffer = ByteArray(8192)
+                        var totalLlegit = 0L
+                        while (totalLlegit < mida) {
+                            val aLlegir = minOf(buffer.size.toLong(), mida - totalLlegit).toInt()
+                            val llegitsNow = input.read(buffer, 0, aLlegir)
+                            if (llegitsNow == -1) break
+                            fos.write(buffer, 0, llegitsNow)
+                            totalLlegit += llegitsNow
+                        }
                         fos.flush()
                     }
-                    println("✅ Fitxer desxifrat i guardat: ${file.absolutePath} (${bytesClars.size} bytes)")
+                    println("✅ Fitxer guardat correctament a: ${file.absolutePath}")
                 } catch (e: Exception) {
                     println("❌ Error en PUJAR: ${e.message}")
                 }
@@ -82,22 +61,22 @@ fun handleClient(socket: Socket) {
 
             "BAIXAR" -> {
                 if (file.exists()) {
-                    // 1. Leemos el archivo en claro
-                    val bytesClars = file.readBytes()
-
-                    // 2. Ciframos antes de enviar
-                    val bytesCifrats = xifrar(bytesClars)
-
-                    println("📤 Enviant fitxer xifrat: ${file.name} (${bytesCifrats.size} bytes)")
+                    println("📤 Enviant fitxer: ${file.name} (${file.length()} bytes)")
 
                     output.writeBoolean(true)
-                    output.writeLong(bytesCifrats.size.toLong()) // ← tamaño de los bytes cifrados
+                    output.writeLong(file.length())
                     output.flush()
 
-                    output.write(bytesCifrats)
+                    file.inputStream().use { fis ->
+                        val buffer = ByteArray(8192)
+                        var bytesLeidos: Int
+                        while (fis.read(buffer).also { bytesLeidos = it } != -1) {
+                            output.write(buffer, 0, bytesLeidos)
+                        }
+                    }
                     output.flush()
-
-                    Thread.sleep(500)
+                    // SIN shutdownOutput() — dejamos que el cliente cierre primero
+                    Thread.sleep(500) // damos tiempo al cliente para leer todos los bytes
                     println("✅ Enviament completat.")
                 } else {
                     println("⚠️ L'arxiu no existeix: ${file.absolutePath}")
