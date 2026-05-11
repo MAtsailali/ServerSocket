@@ -3,6 +3,7 @@ import java.net.ServerSocket
 import java.net.Socket
 import javax.crypto.Cipher
 import javax.crypto.spec.SecretKeySpec
+import kotlin.concurrent.thread 
 
 private const val KEY_STRING = "1234567812345678"
 private const val ALGORITHM = "AES/ECB/PKCS5Padding"
@@ -24,20 +25,27 @@ fun desxifrar(dades: ByteArray): ByteArray {
 fun main() {
     val port = 1234
     val server = ServerSocket(port)
-    println("🚀 Servidor de fitxers actiu al port $port...")
+    println("🚀 Servidor MULTIHILO activo en el puerto $port...")
 
     while (true) {
         try {
             val clientSocket = server.accept()
-            println("📱 Client connectat des de: ${clientSocket.inetAddress.hostAddress}")
-            handleClient(clientSocket)
+            println("📱 Nuevo cliente conectado: ${clientSocket.inetAddress.hostAddress}")
+
+            // Esto crea y arranca un hilo inmediatamente para cada cliente.
+            thread {
+                handleClient(clientSocket)
+            }
+
         } catch (e: Exception) {
-            println("❌ Error en la connexió: ${e.message}")
+            println("❌ Error aceptando conexión: ${e.message}")
         }
     }
 }
 
 fun handleClient(socket: Socket) {
+    // Se añade un identificador de hilo para debuggear mejor en consola
+    val threadId = Thread.currentThread().id
     try {
         val input = DataInputStream(socket.getInputStream())
         val output = DataOutputStream(socket.getOutputStream())
@@ -45,6 +53,8 @@ fun handleClient(socket: Socket) {
         val accio = input.readUTF()
         val userId = input.readUTF()
         val fileName = input.readUTF()
+
+        println("[Hilo $threadId] Acción: $accio | Usuario: $userId | Archivo: $fileName")
 
         val directory = File("uploads/$userId")
         if (!directory.exists()) directory.mkdirs()
@@ -55,11 +65,6 @@ fun handleClient(socket: Socket) {
             "PUJAR" -> {
                 try {
                     val mida = input.readLong()
-                    println("📥 Rebent fitxer xifrat: $fileName ($mida bytes)")
-
-                    file.parentFile?.mkdirs()
-
-                    // 1. Leemos todos los bytes cifrados
                     val bytesCifrats = ByteArray(mida.toInt())
                     var totalLlegit = 0
                     while (totalLlegit < mida) {
@@ -68,39 +73,28 @@ fun handleClient(socket: Socket) {
                         totalLlegit += llegitsNow
                     }
 
-                    // 2. Desciframos y guardamos en disco
                     val bytesClars = desxifrar(bytesCifrats)
                     FileOutputStream(file).use { fos ->
                         fos.write(bytesClars)
-                        fos.flush()
                     }
-                    println("✅ Fitxer desxifrat i guardat: ${file.absolutePath} (${bytesClars.size} bytes)")
+                    println("✅ [Hilo $threadId] Guardado: ${file.name}")
                 } catch (e: Exception) {
-                    println("❌ Error en PUJAR: ${e.message}")
+                    println("❌ [Hilo $threadId] Error subiendo: ${e.message}")
                 }
             }
 
             "BAIXAR" -> {
                 if (file.exists()) {
-                    // 1. Leemos el archivo en claro
                     val bytesClars = file.readBytes()
-
-                    // 2. Ciframos antes de enviar
                     val bytesCifrats = xifrar(bytesClars)
 
-                    println("📤 Enviant fitxer xifrat: ${file.name} (${bytesCifrats.size} bytes)")
-
                     output.writeBoolean(true)
-                    output.writeLong(bytesCifrats.size.toLong()) // ← tamaño de los bytes cifrados
+                    output.writeLong(bytesCifrats.size.toLong())
                     output.flush()
-
                     output.write(bytesCifrats)
                     output.flush()
-
-                    Thread.sleep(500)
-                    println("✅ Enviament completat.")
+                    println("✅ [Hilo $threadId] Enviado: ${file.name}")
                 } else {
-                    println("⚠️ L'arxiu no existeix: ${file.absolutePath}")
                     output.writeBoolean(false)
                     output.flush()
                 }
@@ -108,9 +102,9 @@ fun handleClient(socket: Socket) {
         }
 
     } catch (e: Exception) {
-        println("❌ Error processant dades: ${e.message}")
+        println("❌ [Hilo $threadId] Error de datos: ${e.message}")
     } finally {
         try { socket.close() } catch (e: Exception) { }
-        println("🔌 Connexió tancada.")
+        println("🔌 [Hilo $threadId] Conexión cerrada.")
     }
 }
